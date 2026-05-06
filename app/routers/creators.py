@@ -97,7 +97,7 @@ def add_creator_form(username: str = Form(...), notes: str = Form(""), db: Sessi
 
 @router.get("/add/{username}", response_class=HTMLResponse)
 def add_via_bookmarklet(username: str, request: Request, db: Session = Depends(get_db)):
-    """Bookmarklet öffnet diesen Tab – Creator wird hinzugefügt und Tab schließt sich."""
+    """Bookmarklet öffnet diesen Tab – Creator wird sofort gespeichert, Tab schließt sich."""
     username = username.strip().lstrip("@").lower()
     existing = db.query(Creator).filter(Creator.username == username).first()
     if existing:
@@ -107,19 +107,8 @@ def add_via_bookmarklet(username: str, request: Request, db: Session = Depends(g
         msg = f"@{username} wird bereits getrackt."
         status = "info"
     else:
-        try:
-            ig = get_ig_service()
-            profile = ig.get_profile_metadata(username)
-        except (ProfileNotFoundError, RateLimitedError, Exception):
-            profile = None
-        creator = Creator(
-            username=username,
-            display_name=profile.display_name if profile else None,
-            bio=profile.bio if profile else None,
-            follower_count=profile.follower_count if profile else None,
-            profile_pic_url=profile.profile_pic_url if profile else None,
-            last_post_shortcode=profile.latest_post_shortcode if profile else None,
-        )
+        # Sofort speichern ohne Instagram zu kontaktieren – Profildaten kommen beim nächsten Check
+        creator = Creator(username=username)
         db.add(creator)
         db.commit()
         msg = f"✓ @{username} gespeichert!"
