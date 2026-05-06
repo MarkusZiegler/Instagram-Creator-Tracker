@@ -247,7 +247,7 @@ TIMEZONE=Europe/Vienna
 
 ## Geplante Erweiterungen
 
-### Multi-User Support (Stufe 2)
+### Stufe 2 – Multi-User Support
 
 Ziel: Die App an Freunde weitergeben – jeder hat seine eigene Creator-Liste und bekommt seinen eigenen Digest.
 
@@ -272,4 +272,38 @@ users: id, email, password_hash, display_name, notify_hour, timezone, created_at
 creators: ... + user_id (FK → users.id)
 ```
 
-**Hinweis für die Umsetzung:** Das Fundament (Phase 1–6) ist so gebaut, dass `user_id` per Alembic-Migration sauber nachträglich hinzugefügt werden kann, ohne bestehende Daten zu verlieren.
+**Hinweis:** Das Fundament (Phase 1–6) ist so gebaut, dass `user_id` per Alembic-Migration sauber nachträglich hinzugefügt werden kann, ohne bestehende Daten zu verlieren.
+
+---
+
+### Stufe 3 – Creator-Listen teilen
+
+Ziel: Interessante Creator mit Freunden austauschen – per Link, ohne Datei-Hin-und-Her.
+
+**Empfohlener Ansatz: Teilbarer Link**
+
+1. Im Dashboard gibt es einen Button **"Liste teilen"**
+2. Die App generiert einen einmaligen, öffentlichen Link (z.B. `https://app.railway.app/share/abc123`)
+3. Der Freund öffnet den Link – sieht eine Übersicht aller Creator in der Liste (ohne Login)
+4. Mit einem Klick auf **"Alle übernehmen"** werden die Creator in seine eigene Liste importiert
+   - Hat er noch keinen Account: er wird zur Registrierung weitergeleitet, danach automatisch importiert
+
+**Datenbankänderung:**
+```
+# Neue Tabelle
+share_links: id, user_id (FK), token (unique, zufällig), 
+             label (z.B. "Meine Fotografie-Liste"), 
+             creator_usernames (JSON-Array),
+             created_at, expires_at (optional)
+```
+
+**Ablauf technisch:**
+```
+POST /share          → erzeugt share_link, gibt Token zurück
+GET  /share/{token}  → zeigt die Liste (öffentlich, kein Login nötig)
+POST /share/{token}/import → importiert alle Creator in eigene Liste
+```
+
+**Varianten:**
+- Export als JSON/CSV ebenfalls möglich (einfacher, aber weniger elegant)
+- "Gemeinsame Listen" die mehrere User abonnieren können wäre Stufe 4 (soziales Netzwerk-Richtung)
