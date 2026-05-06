@@ -95,6 +95,46 @@ def add_creator_form(username: str = Form(...), notes: str = Form(""), db: Sessi
     return RedirectResponse(url="/", status_code=303)
 
 
+@router.get("/add/{username}", response_class=HTMLResponse)
+def add_via_bookmarklet(username: str, request: Request, db: Session = Depends(get_db)):
+    """Bookmarklet öffnet diesen Tab – Creator wird hinzugefügt und Tab schließt sich."""
+    username = username.strip().lstrip("@").lower()
+    existing = db.query(Creator).filter(Creator.username == username).first()
+    if existing:
+        if not existing.is_active:
+            existing.is_active = True
+            db.commit()
+        msg = f"@{username} wird bereits getrackt."
+        status = "info"
+    else:
+        try:
+            ig = get_ig_service()
+            profile = ig.get_profile_metadata(username)
+        except (ProfileNotFoundError, RateLimitedError, Exception):
+            profile = None
+        creator = Creator(
+            username=username,
+            display_name=profile.display_name if profile else None,
+            bio=profile.bio if profile else None,
+            follower_count=profile.follower_count if profile else None,
+            profile_pic_url=profile.profile_pic_url if profile else None,
+            last_post_shortcode=profile.latest_post_shortcode if profile else None,
+        )
+        db.add(creator)
+        db.commit()
+        msg = f"✓ @{username} gespeichert!"
+        status = "ok"
+    bg = "#f0fdf4" if status == "ok" else "#fefce8"
+    color = "#166534" if status == "ok" else "#713f12"
+    html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>{msg}</title>
+<script>setTimeout(()=>window.close(),2000)</script>
+<style>body{{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:{bg}}}
+p{{font-size:1.2rem;color:{color}}}</style></head>
+<body><p>{msg}</p></body></html>"""
+    return HTMLResponse(html)
+
+
 @router.get("/creators/{username}", response_class=HTMLResponse)
 def creator_detail(username: str, request: Request, db: Session = Depends(get_db)):
     creator = db.query(Creator).filter(Creator.username == username).first()

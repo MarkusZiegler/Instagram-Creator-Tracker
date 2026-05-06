@@ -35,7 +35,7 @@
       <h2 class="font-semibold text-gray-800 mb-2">Bookmarklet</h2>
       <p class="text-xs text-gray-500 mb-3">Diesen Link in die Lesezeichenleiste ziehen. Dann auf jedem Instagram-Profil klicken um den Creator sofort zu speichern.</p>
       <a
-        href="javascript:(function(){var m=location.href.match(/instagram\.com\/([^\/\?#]+)/);if(m&&m[1]!=='p'&&m[1]!=='reel'&&m[1]!=='explore'){fetch('{{ base_url }}/creators',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:m[1]})}).then(function(r){return r.json()}).then(function(d){alert(d.detail||('+++ Gespeichert: @'+d.username))}).catch(function(e){alert('Fehler: '+e)})}else{alert('Kein Instagram-Profil!')}})()"
+        href="javascript:(function(){var m=location.href.match(/instagram\.com\/([^\/\?#]+)/);if(m&&m[1]!=='p'&&m[1]!=='reel'&&m[1]!=='explore'&&m[1]!=='accounts'&&m[1]!=='stories'){window.open('{{ base_url }}/add/'+m[1],'_blank','width=350,height=150')}else{alert('Kein Instagram-Profil – bitte auf einer Profilseite klicken!')};})()" 
         class="inline-block bg-yellow-400 text-yellow-900 font-bold px-4 py-2 rounded-lg text-sm cursor-move hover:bg-yellow-300 select-all"
         onclick="return false"
       >
@@ -123,7 +123,7 @@
       </div>
     {% else %}
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-400">
-        <p class="text-4xl mb-2">📭</p>
+        <p class="text-4xl mb-2">💭</p>
         <p class="text-sm">Keine neuen Posts seit dem letzten Check.</p>
         <p class="text-xs mt-1">Nutze "Jetzt prüfen" oder warte bis 07:00 Uhr morgens.</p>
       </div>
