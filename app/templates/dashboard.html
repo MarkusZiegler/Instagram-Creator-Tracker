@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – Creator Tracker{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+  <!-- Left column: Creator management -->
+  <div class="lg:col-span-1 space-y-6">
+
+    <!-- Add creator form -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <h2 class="font-semibold text-gray-800 mb-3">Creator hinzufügen</h2>
+      <form action="/creators/add-form" method="post" class="space-y-3">
+        <input
+          name="username"
+          type="text"
+          placeholder="@username oder Instagram-URL"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+          required
+        />
+        <input
+          name="notes"
+          type="text"
+          placeholder="Notiz (optional)"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+        />
+        <button type="submit" class="w-full bg-pink-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-pink-700">
+          Hinzufügen
+        </button>
+      </form>
+    </div>
+
+    <!-- Bookmarklet -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <h2 class="font-semibold text-gray-800 mb-2">Bookmarklet</h2>
+      <p class="text-xs text-gray-500 mb-3">Diesen Link in die Lesezeichenleiste ziehen. Dann auf jedem Instagram-Profil klicken um den Creator sofort zu speichern.</p>
+      <a
+        href="javascript:(function(){var m=location.href.match(/instagram\.com\/([^\/\?#]+)/);if(m&&m[1]!=='p'&&m[1]!=='reel'&&m[1]!=='explore'){fetch('{{ base_url }}/creators',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:m[1]})}).then(function(r){return r.json()}).then(function(d){alert(d.detail||('+++ Gespeichert: @'+d.username))}).catch(function(e){alert('Fehler: '+e)})}else{alert('Kein Instagram-Profil!')}})()"
+        class="inline-block bg-yellow-400 text-yellow-900 font-bold px-4 py-2 rounded-lg text-sm cursor-move hover:bg-yellow-300 select-all"
+        onclick="return false"
+      >
+        ★ Creator speichern
+      </a>
+    </div>
+
+    <!-- Manual check -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <h2 class="font-semibold text-gray-800 mb-2">Manueller Check</h2>
+      <p class="text-xs text-gray-500 mb-3">Alle Creator jetzt auf neue Posts prüfen (läuft täglich automatisch um {{ "07:00" }} Uhr).</p>
+      <button
+        onclick="runCheck()"
+        id="checkBtn"
+        class="w-full bg-gray-800 text-white rounded-lg py-2 text-sm font-medium hover:bg-gray-700"
+      >
+        Jetzt prüfen
+      </button>
+      <div id="checkResult" class="mt-2 text-xs text-gray-600 hidden"></div>
+    </div>
+
+    <!-- Creator list -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <h2 class="font-semibold text-gray-800 mb-3">Meine Creator ({{ creators|length }})</h2>
+      {% if creators %}
+        <ul class="space-y-2">
+          {% for c in creators %}
+          <li class="flex items-center gap-2">
+            {% if c.profile_pic_url %}
+              <img src="{{ c.profile_pic_url }}" class="w-8 h-8 rounded-full object-cover" onerror="this.style.display='none'">
+            {% else %}
+              <div class="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-pink-600 text-xs font-bold">{{ c.username[0].upper() }}</div>
+            {% endif %}
+            <div class="flex-1 min-w-0">
+              <a href="/creators/{{ c.username }}" class="text-sm font-medium hover:text-pink-600 truncate block">@{{ c.username }}</a>
+              {% if c.tags %}
+                <span class="text-xs text-gray-400">{{ c.tags }}</span>
+              {% endif %}
+            </div>
+            <button onclick="removeCreator('{{ c.username }}')" class="text-gray-300 hover:text-red-400 text-xs">✕</button>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-sm text-gray-400">Noch keine Creator. Füge deinen ersten Creator oben hinzu oder nutze das Bookmarklet auf Instagram.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right column: New posts feed -->
+  <div class="lg:col-span-2">
+    <h2 class="font-semibold text-gray-800 mb-4">
+      Neue Posts
+      {% if new_posts %}
+        <span class="ml-2 bg-pink-100 text-pink-700 text-xs px-2 py-0.5 rounded-full">{{ new_posts|length }}</span>
+      {% endif %}
+    </h2>
+
+    {% if new_posts %}
+      <div class="space-y-4">
+        {% for post in new_posts %}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4">
+          {% if post.thumbnail_url %}
+            <a href="{{ post.post_url }}" target="_blank" class="flex-shrink-0">
+              <img src="{{ post.thumbnail_url }}" class="w-20 h-20 object-cover rounded-lg" onerror="this.style.display='none'">
+            </a>
+          {% endif %}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <a href="/creators/{{ post.creator.username }}" class="text-sm font-semibold text-pink-600 hover:underline">@{{ post.creator.username }}</a>
+              <span class="text-xs text-gray-400">{{ post.post_type }}</span>
+              <span class="text-xs text-gray-400">{{ post.posted_at.strftime('%d.%m.%Y') }}</span>
+            </div>
+            {% if post.caption %}
+              <p class="text-sm text-gray-700 line-clamp-2">{{ post.caption }}</p>
+            {% endif %}
+            <div class="mt-2 flex items-center gap-3 text-xs text-gray-400">
+              {% if post.like_count is not none %}<span>♥ {{ post.like_count }}</span>{% endif %}
+              {% if post.comment_count is not none %}<span>💬 {{ post.comment_count }}</span>{% endif %}
+              <a href="{{ post.post_url }}" target="_blank" class="text-pink-500 hover:underline ml-auto">Instagram öffnen →</a>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-400">
+        <p class="text-4xl mb-2">📭</p>
+        <p class="text-sm">Keine neuen Posts seit dem letzten Check.</p>
+        <p class="text-xs mt-1">Nutze "Jetzt prüfen" oder warte bis 07:00 Uhr morgens.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+async function runCheck() {
+  const btn = document.getElementById('checkBtn');
+  const result = document.getElementById('checkResult');
+  btn.disabled = true;
+  btn.textContent = 'Prüfe...';
+  result.classList.add('hidden');
+  try {
+    const r = await fetch('/jobs/check-now', { method: 'POST' });
+    const d = await r.json();
+    result.textContent = `✓ ${d.total_checked} Creator geprüft, ${d.total_new_posts} neue Posts${d.digest_sent ? ', E-Mail gesendet' : ''}.`;
+    result.classList.remove('hidden');
+    setTimeout(() => location.reload(), 2000);
+  } catch(e) {
+    result.textContent = 'Fehler: ' + e;
+    result.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Jetzt prüfen';
+  }
+}
+
+async function removeCreator(username) {
+  if (!confirm(`@${username} entfernen?`)) return;
+  await fetch(`/creators/${username}`, { method: 'DELETE' });
+  location.reload();
+}
+</script>
+{% endblock %}
