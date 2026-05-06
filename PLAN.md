@@ -242,3 +242,34 @@ TIMEZONE=Europe/Vienna
 5. Auf Railway deployen, Bookmarklet installieren
 6. Auf Instagram surfen, Profil öffnen, Bookmarklet klicken → Alert "Gespeichert"
 7. Am nächsten Morgen (07:00 Uhr) E-Mail-Digest empfangen
+
+---
+
+## Geplante Erweiterungen
+
+### Multi-User Support (Stufe 2)
+
+Ziel: Die App an Freunde weitergeben – jeder hat seine eigene Creator-Liste und bekommt seinen eigenen Digest.
+
+**Was sich ändert:**
+- Neue Tabelle `users` (id, email, password_hash, created_at, notify_hour, timezone)
+- `creators`-Tabelle bekommt eine `user_id`-Spalte (FK auf `users`)
+- Login/Registrierung per E-Mail + Passwort (z.B. mit `passlib` für Passwort-Hashing)
+- Sessions oder JWT-Token für eingeloggte Benutzer
+- Morning-Check läuft pro User und sendet jedem seinen eigenen Digest
+- Dashboard zeigt nur die eigenen Creator
+
+**Was gleich bleibt:**
+- Gesamte App-Logik (Bookmarklet, Check-Algorithmus, E-Mail-Digest)
+- Datenbankstruktur von `posts` und `check_logs` (erben `user_id` über `creator`)
+
+**Datenbankänderung:**
+```
+# Neue Tabelle
+users: id, email, password_hash, display_name, notify_hour, timezone, created_at
+
+# Geänderte Tabelle (eine Spalte dazu)
+creators: ... + user_id (FK → users.id)
+```
+
+**Hinweis für die Umsetzung:** Das Fundament (Phase 1–6) ist so gebaut, dass `user_id` per Alembic-Migration sauber nachträglich hinzugefügt werden kann, ohne bestehende Daten zu verlieren.
