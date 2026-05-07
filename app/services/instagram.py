@@ -51,6 +51,7 @@ class InstagramService:
             save_metadata=False,
             compress_json=False,
             quiet=True,
+            max_connection_attempts=1,  # Sofort aufgeben statt Minuten zu warten
         )
         self._try_load_session()
 
