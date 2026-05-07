@@ -79,10 +79,18 @@ class InstagramService:
     def get_profile(self, username: str) -> instaloader.Profile:
         try:
             return instaloader.Profile.from_username(self.loader.context, username)
-        except instaloader.exceptions.ProfileNotExistsException:
+        except instaloader.exceptions.ProfileNotExistsException as e:
+            logger.warning("ProfileNotExistsException for @%s: %s", username, e)
             raise ProfileNotFoundError(f"Profile not found: {username}")
-        except instaloader.exceptions.TooManyRequestsException:
+        except instaloader.exceptions.TooManyRequestsException as e:
+            logger.warning("TooManyRequestsException for @%s: %s", username, e)
             raise RateLimitedError("Rate limited by Instagram")
+        except instaloader.exceptions.LoginRequiredException as e:
+            logger.error("LoginRequiredException for @%s – session may be expired: %s", username, e)
+            raise RateLimitedError("Login required – session expired")
+        except Exception as e:
+            logger.error("Unexpected exception fetching @%s (%s): %s", username, type(e).__name__, e)
+            raise
 
     def get_profile_metadata(self, username: str) -> ProfileData:
         profile = self.get_profile(username)
