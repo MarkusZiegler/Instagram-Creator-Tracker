@@ -83,11 +83,11 @@ async def run_morning_check(db: Session) -> CheckSummary:
             break
 
         except ProfileNotFoundError:
-            creator.is_active = False
             db.add(CheckLog(creator_id=creator.id, new_posts_found=0, status="not_found",
                             error_message="Profile not found or private"))
             db.commit()
-            logger.warning("@%s not found - deactivated", creator.username)
+            errors += 1
+            logger.warning("@%s not found or private - skipping (not deactivated)", creator.username)
 
         except Exception as e:
             db.add(CheckLog(creator_id=creator.id, new_posts_found=0, status="error",
