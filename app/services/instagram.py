@@ -1,7 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import instaloader
@@ -40,6 +40,16 @@ class ProfileData:
 
 
 class InstagramService:
+    # Instagram mobile API headers — bypasses broken graphql/query get_posts()
+    _MOBILE_HEADERS = {
+        "X-IG-App-ID": "936619743392459",
+        "User-Agent": (
+            "Mozilla/5.0 (Linux; Android 11; Pixel 5) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/90.0.4430.91 Mobile Safari/537.36"
+        ),
+    }
+
     def __init__(self, session_file: str):
         self.session_file = session_file
         self.loader = instaloader.Instaloader(
@@ -51,7 +61,7 @@ class InstagramService:
             save_metadata=False,
             compress_json=False,
             quiet=True,
-            max_connection_attempts=1,  # Sofort aufgeben statt Minuten zu warten
+            max_connection_attempts=1,
         )
         self._try_load_session()
 
@@ -96,10 +106,9 @@ class InstagramService:
         profile = self.get_profile(username)
         latest_shortcode = None
         try:
-            post = next(profile.get_posts())
-            latest_shortcode = post.shortcode
-        except StopIteration:
-            pass
+            posts = self._fetch_posts_mobile(profile.userid, since_shortcode=None, max_posts=1)
+            if posts:
+                latest_shortcode = posts[0].shortcode
         except Exception:
             pass
         return ProfileData(
@@ -118,43 +127,92 @@ class InstagramService:
         max_posts: int = 12,
     ) -> list[PostData]:
         profile = self.get_profile(username)
-        results: list[PostData] = []
+        return self._fetch_posts_mobile(profile.userid, since_shortcode, max_posts)
 
-        try:
-            for post in profile.get_posts():
-                if post.shortcode == since_shortcode:
-                    break
-                results.append(self._post_to_data(post))
+    def _fetch_posts_mobile(
+        self,
+        user_id: int,
+        since_shortcode: Optional[str],
+        max_posts: int,
+    ) -> list[PostData]:
+        session = self.loader.context._session
+        url = f"https://i.instagram.com/api/v1/feed/user/{user_id}/"
+        results: list[PostData] = []
+        next_max_id = None
+
+        while len(results) < max_posts:
+            params: dict = {"count": min(max_posts, 12)}
+            if next_max_id:
+                params["max_id"] = next_max_id
+
+            try:
+                resp = session.get(
+                    url, headers=self._MOBILE_HEADERS, params=params, timeout=15
+                )
+            except Exception as e:
+                raise RuntimeError(f"Network error fetching posts: {e}") from e
+
+            if resp.status_code == 429:
+                raise RateLimitedError("Rate limited by Instagram")
+            if resp.status_code in (401, 403):
+                raise RateLimitedError("Session expired or unauthorized")
+            if resp.status_code != 200:
+                raise RuntimeError(f"Instagram returned HTTP {resp.status_code}")
+
+            try:
+                data = resp.json()
+            except Exception as e:
+                raise RuntimeError(f"Invalid JSON response: {e}") from e
+
+            items = data.get("items", [])
+            if not items:
+                break
+
+            for item in items:
+                code = item.get("code") or item.get("shortcode", "")
+                if code == since_shortcode:
+                    return results
+                results.append(self._item_to_post_data(item))
                 if len(results) >= max_posts:
-                    break
-        except instaloader.exceptions.TooManyRequestsException:
-            raise RateLimitedError("Rate limited by Instagram")
-        except Exception as e:
-            raise RuntimeError(f"Error fetching posts for {username}: {e}") from e
+                    return results
+
+            if not data.get("more_available"):
+                break
+            next_max_id = data.get("next_max_id")
+            if not next_max_id:
+                break
 
         return results
 
-    def _post_to_data(self, post: instaloader.Post) -> PostData:
-        if post.is_video:
-            post_type = "reel" if post.product_type == "clips" else "video"
-        elif post.typename == "GraphSidecar":
+    def _item_to_post_data(self, item: dict) -> PostData:
+        code = item.get("code") or item.get("shortcode", "")
+        media_type = item.get("media_type", 1)
+        if media_type == 2:
+            post_type = "reel" if item.get("product_type") == "clips" else "video"
+        elif media_type == 8:
             post_type = "carousel"
         else:
             post_type = "photo"
 
         thumbnail_url = None
-        try:
-            thumbnail_url = post.url
-        except Exception:
-            pass
+        if "image_versions2" in item:
+            candidates = item["image_versions2"].get("candidates", [])
+            if candidates:
+                thumbnail_url = candidates[0].get("url")
+
+        caption = None
+        if item.get("caption"):
+            caption = item["caption"].get("text", "")[:500]
+
+        posted_at = datetime.fromtimestamp(item.get("taken_at", 0), tz=timezone.utc)
 
         return PostData(
-            shortcode=post.shortcode,
-            post_url=f"https://www.instagram.com/p/{post.shortcode}/",
+            shortcode=code,
+            post_url=f"https://www.instagram.com/p/{code}/",
             thumbnail_url=thumbnail_url,
-            caption=post.caption[:500] if post.caption else None,
+            caption=caption,
             post_type=post_type,
-            like_count=post.likes,
-            comment_count=post.comments,
-            posted_at=post.date_utc,
+            like_count=item.get("like_count"),
+            comment_count=item.get("comment_count"),
+            posted_at=posted_at,
         )
