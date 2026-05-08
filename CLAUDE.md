@@ -62,13 +62,18 @@ TIMEZONE=Europe/Vienna
 ## Offene Punkte / Nächste Schritte
 
 ### Sofort
-1. **Check testen** nach letztem Fix (mobile API für Profile-Lookup):
-   - `git pull origin main` → uvicorn neu starten → "Jetzt prüfen"
-   - Alle Creator sollten jetzt funktionieren (nicht mehr nur der erste)
+1. **Session erneuern mit `zieglermarkus`-Cookies** (Stand 2026-05-08):
+   - Die Session-Cookies sind abgelaufen → "Rate limited after 0 creators" im Log
+     bedeutet in Wirklichkeit 401/403 (Session expired), KEIN echtes Rate-Limit
+   - Im Browser bei Instagram als `zieglermarkus` einloggen
+   - F12 → Application → Cookies → sessionid, csrftoken, ds_user_id kopieren
+   - `python make_session.py` ausführen
+   - uvicorn neu starten → "Jetzt prüfen"
 
-2. **insta_creator_tracker Account testen** — ob der Zweit-Account (für Scraping)
-   inzwischen funktioniert. Falls ja, Session auf den Scraping-Account wechseln
-   (schont den persönlichen Account zieglermarkus).
+2. **`insta_creator_tracker` Account NICHT für Session verwenden**:
+   - Instagram hat beim Login "We suspect automated behavior" angezeigt
+   - Account ist zu neu/unauffällig → höheres Sperr-Risiko
+   - Weiterhin `zieglermarkus` verwenden
 
 3. **Creators bereinigen**: `@alphavision.media` und `@sarv.vj` scheinen nicht zu
    existieren oder privat zu sein → im Dashboard entfernen.

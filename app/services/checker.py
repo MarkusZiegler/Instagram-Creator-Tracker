@@ -74,12 +74,12 @@ async def run_morning_check(db: Session) -> CheckSummary:
             delay = random.uniform(settings.DELAY_BETWEEN_CREATORS_MIN, settings.DELAY_BETWEEN_CREATORS_MAX)
             await asyncio.sleep(delay)
 
-        except RateLimitedError:
+        except RateLimitedError as e:
             db.add(CheckLog(creator_id=creator.id, new_posts_found=0, status="rate_limited",
-                            error_message="Instagram rate limit"))
+                            error_message=str(e)))
             db.commit()
             rate_limited = True
-            logger.warning("Rate limited after %d creators. Stopping check.", total_checked)
+            logger.warning("Rate limited after %d creators: %s. Stopping check.", total_checked, e)
             break
 
         except ProfileNotFoundError:
