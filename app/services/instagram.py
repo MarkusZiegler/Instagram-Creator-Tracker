@@ -86,37 +86,49 @@ class InstagramService:
             except Exception as e:
                 logger.warning("Instagram login failed: %s", e)
 
-    def get_profile(self, username: str) -> instaloader.Profile:
+    def _get_user_info_via_api(self, username: str) -> dict:
+        """Fetch profile info via mobile API — avoids graphql/query rate limits."""
+        session = self.loader.context._session
         try:
-            return instaloader.Profile.from_username(self.loader.context, username)
-        except instaloader.exceptions.ProfileNotExistsException as e:
-            logger.warning("ProfileNotExistsException for @%s: %s", username, e)
-            raise ProfileNotFoundError(f"Profile not found: {username}")
-        except instaloader.exceptions.TooManyRequestsException as e:
-            logger.warning("TooManyRequestsException for @%s: %s", username, e)
-            raise RateLimitedError("Rate limited by Instagram")
-        except instaloader.exceptions.LoginRequiredException as e:
-            logger.error("LoginRequiredException for @%s - session may be expired: %s", username, e)
-            raise RateLimitedError("Login required - session expired")
+            resp = session.get(
+                "https://i.instagram.com/api/v1/users/web_profile_info/",
+                headers=self._MOBILE_HEADERS,
+                params={"username": username},
+                timeout=15,
+            )
         except Exception as e:
-            logger.error("Unexpected exception fetching @%s (%s): %s", username, type(e).__name__, e)
-            raise
+            raise RuntimeError(f"Network error fetching profile {username}: {e}") from e
+
+        if resp.status_code == 404:
+            raise ProfileNotFoundError(f"Profile not found: {username}")
+        if resp.status_code == 429:
+            raise RateLimitedError("Rate limited by Instagram")
+        if resp.status_code in (401, 403):
+            raise RateLimitedError("Session expired or unauthorized")
+        if resp.status_code != 200:
+            raise RuntimeError(f"Instagram returned HTTP {resp.status_code} for @{username}")
+
+        user = resp.json().get("data", {}).get("user")
+        if not user:
+            raise ProfileNotFoundError(f"Profile not found: {username}")
+        return user
 
     def get_profile_metadata(self, username: str) -> ProfileData:
-        profile = self.get_profile(username)
+        user = self._get_user_info_via_api(username)
+        user_id = int(user["id"])
         latest_shortcode = None
         try:
-            posts = self._fetch_posts_mobile(profile.userid, since_shortcode=None, max_posts=1)
+            posts = self._fetch_posts_mobile(user_id, since_shortcode=None, max_posts=1)
             if posts:
                 latest_shortcode = posts[0].shortcode
         except Exception:
             pass
         return ProfileData(
-            username=profile.username,
-            display_name=profile.full_name or None,
-            bio=profile.biography or None,
-            follower_count=profile.followers,
-            profile_pic_url=profile.profile_pic_url,
+            username=user.get("username", username),
+            display_name=user.get("full_name") or None,
+            bio=user.get("biography") or None,
+            follower_count=user.get("edge_followed_by", {}).get("count"),
+            profile_pic_url=user.get("profile_pic_url") or None,
             latest_post_shortcode=latest_shortcode,
         )
 
@@ -126,8 +138,9 @@ class InstagramService:
         since_shortcode: Optional[str],
         max_posts: int = 12,
     ) -> list[PostData]:
-        profile = self.get_profile(username)
-        return self._fetch_posts_mobile(profile.userid, since_shortcode, max_posts)
+        user = self._get_user_info_via_api(username)
+        user_id = int(user["id"])
+        return self._fetch_posts_mobile(user_id, since_shortcode, max_posts)
 
     def _fetch_posts_mobile(
         self,
