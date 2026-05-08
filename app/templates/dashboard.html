@@ -87,17 +87,24 @@
 
   <!-- Right column: New posts feed -->
   <div class="lg:col-span-2">
-    <h2 class="font-semibold text-gray-800 mb-4">
-      Neue Posts
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-semibold text-gray-800">
+        Neue Posts
+        {% if new_posts %}
+          <span class="ml-2 bg-pink-100 text-pink-700 text-xs px-2 py-0.5 rounded-full">{{ new_posts|length }}</span>
+        {% endif %}
+      </h2>
       {% if new_posts %}
-        <span class="ml-2 bg-pink-100 text-pink-700 text-xs px-2 py-0.5 rounded-full">{{ new_posts|length }}</span>
+        <button onclick="markAllSeen()" class="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-2 py-1">
+          alle als gelesen markieren
+        </button>
       {% endif %}
-    </h2>
+    </div>
 
     {% if new_posts %}
       <div class="space-y-4">
         {% for post in new_posts %}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4" id="post-{{ post.shortcode }}">
           {% if post.thumbnail_url %}
             <a href="{{ post.post_url }}" target="_blank" class="flex-shrink-0">
               <img src="{{ post.thumbnail_url }}" class="w-20 h-20 object-cover rounded-lg" onerror="this.style.display='none'">
@@ -108,6 +115,7 @@
               <a href="/creators/{{ post.creator.username }}" class="text-sm font-semibold text-pink-600 hover:underline">@{{ post.creator.username }}</a>
               <span class="text-xs text-gray-400">{{ post.post_type }}</span>
               <span class="text-xs text-gray-400">{{ post.posted_at.strftime('%d.%m.%Y') }}</span>
+              <button onclick="markSeen('{{ post.shortcode }}')" class="ml-auto text-xs text-gray-300 hover:text-green-500" title="Als gelesen markieren">✓</button>
             </div>
             {% if post.caption %}
               <p class="text-sm text-gray-700 line-clamp-2">{{ post.caption }}</p>
@@ -156,6 +164,17 @@ async function runCheck() {
 async function removeCreator(username) {
   if (!confirm(`@${username} entfernen?`)) return;
   await fetch(`/creators/${username}`, { method: 'DELETE' });
+  location.reload();
+}
+
+async function markSeen(shortcode) {
+  await fetch(`/posts/${shortcode}/mark-seen`, { method: 'POST' });
+  const el = document.getElementById(`post-${shortcode}`);
+  if (el) el.remove();
+}
+
+async function markAllSeen() {
+  await fetch('/posts/mark-all-seen', { method: 'POST' });
   location.reload();
 }
 </script>
