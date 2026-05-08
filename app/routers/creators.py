@@ -175,3 +175,20 @@ def creator_posts(username: str, db: Session = Depends(get_db)):
     if not creator:
         raise HTTPException(status_code=404, detail="Creator not found")
     return db.query(Post).filter(Post.creator_id == creator.id).order_by(Post.posted_at.desc()).limit(50).all()
+
+
+@router.post("/posts/mark-all-seen")
+def mark_all_seen(db: Session = Depends(get_db)):
+    db.query(Post).filter(Post.is_new == True).update({"is_new": False})
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/posts/{shortcode}/mark-seen")
+def mark_post_seen(shortcode: str, db: Session = Depends(get_db)):
+    post = db.query(Post).filter(Post.shortcode == shortcode).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    post.is_new = False
+    db.commit()
+    return {"ok": True}
