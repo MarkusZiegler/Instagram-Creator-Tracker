@@ -68,12 +68,24 @@ class InstagramService:
     def _try_load_session(self) -> None:
         if os.path.exists(self.session_file):
             try:
-                self.loader.load_session_from_file(
-                    username=None,
-                    filename=self.session_file,
-                )
-                logger.info("Instagram session loaded from %s", self.session_file)
-                return
+                import pickle
+                with open(self.session_file, "rb") as f:
+                    data = pickle.load(f)
+                if isinstance(data, dict):
+                    # Our format: plain dict {sessionid, csrftoken, ds_user_id}
+                    session = self.loader.context._session
+                    for key, value in data.items():
+                        session.cookies.set(key, value, domain=".instagram.com")
+                    logger.info("Instagram session loaded from %s", self.session_file)
+                    return
+                else:
+                    # Instaloader native CookieJar format
+                    self.loader.load_session_from_file(
+                        username=None,
+                        filename=self.session_file,
+                    )
+                    logger.info("Instagram session loaded from %s", self.session_file)
+                    return
             except Exception as e:
                 logger.warning("Could not load session file: %s", e)
 
